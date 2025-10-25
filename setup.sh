@@ -37,6 +37,10 @@ fi
 # 4) Install PyTorch (via uv)
 uv pip install --python ".venv/bin/python" --index-url "$TORCH_INDEX_URL" torch torchvision torchaudio
 
+# 4.1 Install misc libraries
+uv pip install matplotlib
+
+
 # 5) Verify
 python - <<'PY'
 import torch
