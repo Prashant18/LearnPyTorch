@@ -19,29 +19,20 @@ if [ ! -d .venv ]; then
 fi
 source .venv/bin/activate
 
-# 3) Choose PyTorch index URL based on CUDA
-TORCH_INDEX_URL="https://download.pytorch.org/whl/cpu"
+# 3) Choose PyTorch index URL
 if command -v nvidia-smi >/dev/null 2>&1; then
-  CUDA_VER=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9]\+\.[0-9]\+\).*/\1/p' | head -n1 || true)
-  if [ -n "${CUDA_VER:-}" ]; then
-    CUDA_MAJOR=${CUDA_VER%%.*}
-    CUDA_MINOR=${CUDA_VER#*.}
-    if [ "$CUDA_MAJOR" = "12" ]; then
-      if   [ "$CUDA_MINOR" -ge 6 ]; then TORCH_INDEX_URL="https://download.pytorch.org/whl/cu126";
-      elif [ "$CUDA_MINOR" -ge 4 ]; then TORCH_INDEX_URL="https://download.pytorch.org/whl/cu124";
-      elif [ "$CUDA_MINOR" -ge 1 ]; then TORCH_INDEX_URL="https://download.pytorch.org/whl/cu121"; fi
-    fi
-  fi
+  TORCH_INDEX="https://download.pytorch.org/whl/cu126"
+else
+  TORCH_INDEX="https://download.pytorch.org/whl/cpu"
 fi
 
-# 4) Install PyTorch (via uv)
-uv pip install --python ".venv/bin/python" --index-url "$TORCH_INDEX_URL" torch torchvision torchaudio
+# 4) Install PyTorch (via uv, only if not already installed)
+uv pip install --python ".venv/bin/python" --index-url "$TORCH_INDEX" torch torchvision torchaudio
 
-# 4.1 Install misc libraries
-uv pip install matplotlib
+# 5) Install misc libraries
+uv pip install --python ".venv/bin/python" matplotlib
 
-
-# 5) Verify
+# 6) Verify
 python - <<'PY'
 import torch
 print({
