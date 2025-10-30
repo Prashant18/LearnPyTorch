@@ -2,9 +2,27 @@ import torch
 import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
+
+
+train_transform = transforms.Compose([
+    transforms.RandomHorizontalFlip(p=0.5),  # Randomly flip images
+    transforms.RandomCrop(32, padding=4),     # Random crop with padding
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),  # Color variations
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet normalization
+                        std=[0.229, 0.224, 0.225])
+])
+
+test_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225])
+])
+
 ## Load the train_train_dataset
 train_dataset = torchvision.datasets.CIFAR10(
     root= './',
@@ -64,6 +82,7 @@ class ImageClassifier(nn.Module):
             stride=1,
             padding=1
         ) # Input shape : [1, 3, 32, 32] output shape : [1, 32, 32, 32]
+        self.batchnorm1 = nn.BatchNorm2d(32) # Input Shape: [1, 32, 32, 32] output shape : [1, 32, 32, 32]
         self.relu1 = nn.ReLU() # Input Shape: [1, 32, 32, 32] output shape : [1, 32, 32, 32]
         ## Now pooling layer
         self.pool = nn.MaxPool2d(
@@ -84,18 +103,39 @@ class ImageClassifier(nn.Module):
             stride=2,
             padding=0
         ) # Input Shape: [1, 64, 16, 16] output shape : [1, 64, 8, 8]
-        self.flatten = nn.Flatten() # Input Shape: [1, 64, 8, 8] output shape : [1, 64 * 8 * 8] = [1, 4096]
-        self.linear1 = nn.Linear(4096, 1024) # Input Shape: [1, 4096] output shape : [1, 1024]
+        self.Conv3 = nn.Conv2d(
+            in_channels=64,
+            out_channels=128,
+            kernel_size=3,
+            stride=1,
+            padding=1
+        ) # Input Shape: [1, 64, 8, 8] output shape : [1, 128, 8, 8]
+        self.relu3 = nn.ReLU() # Input Shape: [1, 128, 8, 8] output shape : [1, 128, 8, 8]
+        self.pool3 = nn.MaxPool2d(
+            kernel_size=2,
+            stride=2,
+            padding=0
+        ) # Input Shape: [1, 128, 8, 8] output shape : [1, 128, 4, 4]
+        self.flatten = nn.Flatten() # Input Shape: [1, 128, 4, 4] output shape : [1, 128 * 4 * 4] = [1, 2048]
+        self.linear1 = nn.Linear(2048, 1024) # Input Shape: [1, 2048] output shape : [1, 1024]
+        self.relu4 = nn.ReLU() # Input Shape: [1, 1024] output shape : [1, 1024]
+        self.dropout1 = nn.Dropout(0.2) # Input Shape: [1, 1024] output shape : [1, 1024]
         self.linear2 = nn.Linear(1024, 10) # Input Shape: [1, 1024] output shape : [1, 10]  
     def forward(self, x):
         x = self.Conv1(x)
+        x = self.batchnorm1(x)
         x = self.relu1(x)
         x = self.pool(x)
         x = self.Conv2(x)
         x = self.relu2(x)
         x = self.pool2(x)
+        x = self.Conv3(x)
+        x = self.relu3(x)
+        x = self.pool3(x)
         x = self.flatten(x)
         x = self.linear1(x)
+        x = self.relu4(x)
+        x = self.dropout1(x)
         x = self.linear2(x)
         return x
     
@@ -135,7 +175,7 @@ def test_model(model, test_dataloader, loss_fn):
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-epochs = 20
+epochs = 30
 train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
 for t in range(epochs):
