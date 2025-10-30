@@ -1,7 +1,6 @@
 import torch  # PyTorch: Core library for tensors, neural networks, and GPU acceleration
 import torch.nn as nn  # nn: Neural network modules like layers, activations, and losses
 import torch.nn.functional as F  # Functional: Stateless ops (e.g., relu without class)
-
 # ======================================================================
 # SECTION 1: DEVICE SETUP (CPU vs. GPU)
 # ======================================================================
@@ -185,3 +184,74 @@ print("Done!")  # Training complete
 # Why save? Reuse without retraining – e.g., for inference on new images.
 torch.save(model.state_dict(), "model.pth")
 print("Saved PyTorch Model State to model.pth")
+
+
+'''
+Here is overall summary of the day 1: Building a Neural Network with PyTorch:
+
+Class NeuralNetwork (inherits nn.Module)
++-----------------------------------+
+| __init__(self):                   |
+|   super().__init__()              |  <- Calls parent (nn.Module) init for base setup
+|   self.flatten = nn.Flatten()     |  <- Layer: Turns [N,1,28,28] to [N,784]
+|   self.linear_relu_stack = ...    |  <- Sequential: Stack of Linear + ReLU
++-----------------------------------+
+| forward(self, x):                 |
+|   x = self.flatten(x)             |  <- Flatten input batch
+|   logits = self.linear_relu_stack(x) |  <- Pass through layers
+|   return logits                   |  <- Output: [N,10] raw scores
++-----------------------------------+
+| Inherited Methods (from nn.Module):|
+|   train(self, mode=True)          |  <- Sets training mode (enables dropout/batchnorm if present; here, no effect but good practice)
+|   eval(self)                      |  <- Sets eval mode (disables training behaviors; use in testing)
+|   parameters(self)                |  <- Returns list of trainable tensors (weights/biases)
+|   to(self, device)                |  <- Moves model to GPU/CPU
++-----------------------------------+
+
+Data Flow in Forward (ASCII Visual for Batch N=2, Simplified):
+Input X:
++-----+-----+   +-----+-----+
+| Img1: [1,28,28] | Img2: [1,28,28] |  <- Batch [2,1,28,28]
++-----+-----+   +-----+-----+
+
+After Flatten:
++---------------+   +---------------+
+| Flat1: [784]  |   | Flat2: [784]  |  <- [2,784]
++---------------+   +---------------+
+
+Through Linear_ReLU_Stack:
+Layer1 (Linear 784->512 + ReLU):
++---------------+   +---------------+
+| Feat1: [512]  |   | Feat2: [512]  |  <- [2,512] after ReLU (non-negative)
++---------------+   +---------------+
+
+Layer2 (Linear 512->10 + ReLU):
++---------------+   +---------------+
+| Out1: [10]    |   | Out2: [10]    |  <- [2,10]
++---------------+   +---------------+
+
+Layer3 (Linear 10->10):
++---------------+   +---------------+
+| Logits1: [10] |   | Logits2: [10] |  <- Final [2,10]
++---------------+   +---------------+
+
+Modes Visual (train vs eval):
+In train() mode:
+- Forward as above, but if had Dropout: Randomly zero some features (for regularization).
+- Used in train_loop: model.train()
+
+In eval() mode:
+- Forward without random drops (consistent predictions).
+- Used in test: model.eval()
+- With no_grad(): No graph/grads built – just compute.
+
+Overall Structure Tree:
+NeuralNetwork
+├── flatten: nn.Flatten
+└── linear_relu_stack: nn.Sequential
+    ├── 0: nn.Linear(784,512)
+    ├── 1: nn.ReLU
+    ├── 2: nn.Linear(512,10)
+    ├── 3: nn.ReLU
+    └── 4: nn.Linear(10,10)
+'''

@@ -30,7 +30,7 @@ fi
 uv pip install --python ".venv/bin/python" --index-url "$TORCH_INDEX" torch torchvision torchaudio
 
 # 5) Install misc libraries
-uv pip install --python ".venv/bin/python" matplotlib
+uv pip install --python ".venv/bin/python" matplotlib torchlens
 
 # 6) Verify
 python - <<'PY'
