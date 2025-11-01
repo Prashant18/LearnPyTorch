@@ -28,14 +28,14 @@ train_dataset = torchvision.datasets.CIFAR10(
     root= './',
     train=True,
     download=True,
-    transform = torchvision.transforms.ToTensor()
+    transform = train_transform
 )
 
 test_dataset = torchvision.datasets.CIFAR10(
     root= './',
     train=False,
     download=True,
-    transform = torchvision.transforms.ToTensor()
+    transform = test_transform
 )
 
 print("Size of the train_dataset: ", len(train_dataset))
@@ -88,13 +88,13 @@ class ImageClassifier(nn.Module):
         self.pool2 = nn.MaxPool2d(2, 2) # Input Shape: [1, 64, 16, 16] output shape : [1, 64, 8, 8]
         
         # Block 3
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1) # Input Shape: [1, 64, 16, 16] output shape : [1, 128, 16, 16]
-        self.bn3 = nn.BatchNorm2d(128) # Input Shape: [1, 128, 16, 16] output shape : [1, 128, 16, 16]
-        self.relu3 = nn.ReLU()
-        self.pool3 = nn.MaxPool2d(2, 2) # Input Shape: [1, 128, 4, 4] output shape : [1, 128, 2, 2]
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1) # Input Shape: [1, 64, 8, 8] output shape : [1, 128, 8, 8]
+        self.bn3 = nn.BatchNorm2d(128) # Input Shape: [1, 128, 8, 8] output shape : [1, 128, 8, 8]
+        self.relu3 = nn.ReLU() # Input Shape: [1, 128, 8, 8] output shape : [1, 128, 8, 8]
+        self.pool3 = nn.MaxPool2d(2, 2) # Input Shape: [1, 128, 8, 8] output shape : [1, 128, 4, 4]
         
         # Fully connected layers
-        self.flatten = nn.Flatten() # Input Shape: [1, 128, 2, 2] output shape : [1, 128 * 2 * 2] = [1, 512]    
+        self.flatten = nn.Flatten() # Input Shape: [1, 128, 4, 4] output shape : [1, 128 * 4 * 4] = [1, 2048]    
         self.fc1 = nn.Linear(128 * 4 * 4, 512)  # Reduced size
         self.bn_fc1 = nn.BatchNorm1d(512) # Input Shape: [1, 512] output shape : [1, 512]
         self.relu_fc1 = nn.ReLU() # Input Shape: [1, 512] output shape : [1, 512]
