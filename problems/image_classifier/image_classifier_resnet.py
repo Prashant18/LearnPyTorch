@@ -9,7 +9,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torchvision
 
 # Setting up multiple GPUS
-
 if 'RANK' in os.environ or 'WORLD_SIZE' in os.environ:
     rank = int(os.environ.get('RANK', 0))
     local_rank = int(os.environ.get('LOCAL_RANK', 0))

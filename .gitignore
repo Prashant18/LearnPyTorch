@@ -4,3 +4,4 @@ data/
 *__pycache__/
 problems/image_classifier/cifar-10-batches-py/
 problems/image_classifier/cifar-10-python.tar.gz
+*MNIST*
