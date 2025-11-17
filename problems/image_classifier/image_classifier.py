@@ -329,6 +329,10 @@ def train_model(model, train_dataloader, loss_fn, optimizer):
 
 
 def test_model(model, test_dataloader, loss_fn):
+    # Only main process evaluates to avoid redundant computation
+    if not is_main_process:
+        return
+    
     size = len(test_dataloader.dataset)
     num_batches = len(test_dataloader)
     model.eval()
@@ -340,19 +344,9 @@ def test_model(model, test_dataloader, loss_fn):
             test_loss += loss_fn(pred,y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
     
-    # Multi-GPU: aggregate results across all GPUs
-    if world_size > 1:
-        test_loss_tensor = torch.tensor(test_loss, device=device)
-        correct_tensor = torch.tensor(correct, device=device)
-        dist.all_reduce(test_loss_tensor, op=dist.ReduceOp.SUM)
-        dist.all_reduce(correct_tensor, op=dist.ReduceOp.SUM)
-        test_loss = test_loss_tensor.item() / world_size  # Average loss
-        correct = correct_tensor.item() / world_size  # Average correct (since each GPU sees full test set)
-    
     test_loss /= num_batches
     correct /= size
-    if is_main_process:  # Only print from main process
-        print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
 epochs = 30
 
@@ -403,35 +397,54 @@ if world_size > 1:
 else:
     train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
-test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
-for t in range(epochs):
-    # Multi-GPU: set epoch for sampler to ensure different shuffle each epoch
-    if world_size > 1:
-        train_sampler.set_epoch(t)
-    if is_main_process:
-        print(f"Epoch {t+1}\n------------------------------")
-    train_model(model, train_dataloader, loss_fn, optimizer)
-    test_model(model, test_dataloader, loss_fn)
-
-## Save the model
-# Multi-GPU: unwrap DDP before saving, only save from main process
-if is_main_process:
-    if isinstance(model, DDP):
-        torch.save(model.module.state_dict(), "image_classifier.pth")
-    else:
-        torch.save(model.state_dict(), "image_classifier.pth")
-
-## If the model is already trained, we can load the model
+## Try to load existing checkpoint before training
 # Multi-GPU: only load from main process to avoid file locking issues
-# After training, the model is already trained in memory, but this section
-# demonstrates how to load a saved model.
+checkpoint_loaded = False
 if is_main_process:
-    # Only main process loads to avoid multiple processes reading the same file
-    if isinstance(model, DDP):
-        model.module.load_state_dict(torch.load("image_classifier.pth"))
+    checkpoint_path = "image_classifier.pth"
+    if os.path.exists(checkpoint_path):
+        try:
+            checkpoint = torch.load(checkpoint_path)
+            model_to_load = model.module if isinstance(model, DDP) else model
+            model_to_load.load_state_dict(checkpoint, strict=True)
+            checkpoint_loaded = True
+            print("✓ Successfully loaded checkpoint - skipping training!\n")
+        except Exception as e:
+            print(f"⚠️  Error loading checkpoint: {e}")
+            print("   Training from scratch...\n")
     else:
-        model.load_state_dict(torch.load("image_classifier.pth"))
+        print(f"ℹ️  No checkpoint found. Training from scratch...\n")
+
+# Synchronize all processes - make sure checkpoint is loaded before training
+if world_size > 1:
+    dist.barrier()
+
+# Only train if checkpoint wasn't loaded
+if not checkpoint_loaded:
+    for t in range(epochs):
+        # Multi-GPU: set epoch for sampler to ensure different shuffle each epoch
+        if world_size > 1:
+            train_sampler.set_epoch(t)
+        if is_main_process:
+            print(f"Epoch {t+1}\n------------------------------")
+        train_model(model, train_dataloader, loss_fn, optimizer)
+        test_model(model, test_dataloader, loss_fn)
+
+    ## Save the model after training
+    # Multi-GPU: unwrap DDP before saving, only save from main process
+    if is_main_process:
+        if isinstance(model, DDP):
+            torch.save(model.module.state_dict(), "image_classifier.pth")
+        else:
+            torch.save(model.state_dict(), "image_classifier.pth")
+        print("✓ Model saved to image_classifier.pth\n")
+else:
+    # Model was loaded from checkpoint, just evaluate it
+    if is_main_process:
+        print("Evaluating loaded model:")
+    test_model(model, test_dataloader, loss_fn)
 
 # Set evaluation mode on all processes
 model.eval()
@@ -439,6 +452,7 @@ model.eval()
 ## Test the model with 20 random images from the test dataset and print the label
 # Only run inference from main process
 if is_main_process:
+    torch.manual_seed(42)  # For reproducible sampling
     random_indices = torch.randint(0, len(test_dataset), size=(20,))
     test_images = [test_dataset[i][0] for i in random_indices]
     test_labels = [test_dataset[i][1] for i in random_indices]
